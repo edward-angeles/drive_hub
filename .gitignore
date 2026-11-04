@@ -1,0 +1,18 @@
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Firebase private credentials
+serviceAccountKey.json
+*firebase-adminsdk*.json
+DriveHubSecrets/
+
+# Environment files
+.env
+.env.*
+
+# Development configuration
+appsettings.Development.json

@@ -1,0 +1,5 @@
+@model List<CarPart>
+@{ ViewData["Title"] = "Marketplace"; }
+<section class="hero"><h1>Find your next part.</h1><p>Browse car parts by brand, category and condition.</p></section>
+<form method="get" class="filters"><input name="search" value="@ViewBag.Search" placeholder="Search parts, brand or part number"/><select name="category"><option value="">All categories</option>@foreach(var c in Enum.GetValues<PartType>()){if(ViewBag.Category is PartType selected && selected==c){<option selected value="@c">@c</option>}else{<option value="@c">@c</option>}}</select><button type="submit">Search</button><a asp-action="Index">Reset</a></form>
+<div class="grid">@foreach(var p in Model){<article class="card"><span class="eyebrow">@p.Category • @p.Condition</span><h2>@p.Name</h2><p>@p.Manufacturer · @p.PartNumber</p><p>Quality: @p.QualityScore/100 · Grade: @p.Grade</p><strong class="price">@p.Price.ToString("C")</strong><p>@p.Quantity in stock</p><a class="button" asp-action="Details" asp-route-id="@p.Id">View part</a></article>}</div>@if(!Model.Any()){<p>No matching parts found.</p>}

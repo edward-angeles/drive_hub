@@ -1,0 +1,2 @@
+@model CarPart
+<h1>Delete listing?</h1><p>Remove <strong>@Model.Name</strong> from inventory?</p><form asp-action="Delete" asp-route-id="@Model.Id" method="post"><button type="submit" class="danger">Delete permanently</button> <a asp-action="Manage">Cancel</a></form>
