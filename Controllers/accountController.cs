@@ -119,16 +119,12 @@ public class AccountController : Controller
         {
             if (!response.IsSuccessStatusCode)
 {
-    var firebaseError = await response.Content.ReadAsStringAsync();
-
-    Console.WriteLine("Firebase login failed:");
-    Console.WriteLine(firebaseError);
-
     ModelState.AddModelError(
         "",
-        "Firebase rejected the login. Check the terminal for details.");
+        "Unable to sign in. Please check your email and password.");
 
     return View(model);
+}
 }
 
             var result =
@@ -175,21 +171,32 @@ public class AccountController : Controller
             }
 
             var claims = new List<Claim>
-            {
-                new Claim(
-                    ClaimTypes.NameIdentifier,
-                    verifiedToken.Uid),
+{
+    new Claim(
+        ClaimTypes.NameIdentifier,
+        verifiedToken.Uid),
 
-                new Claim(
-                    ClaimTypes.Name,
-                    firebaseUser.DisplayName ??
-                    firebaseUser.Email ??
-                    "Drive Hub User"),
+    new Claim(
+        ClaimTypes.Name,
+        firebaseUser.DisplayName ??
+        firebaseUser.Email ??
+        "Drive Hub User"),
 
-                new Claim(
-                    ClaimTypes.Email,
-                    firebaseUser.Email ?? model.Email)
-            };
+    new Claim(
+        ClaimTypes.Email,
+        firebaseUser.Email ?? model.Email)
+};
+// Assign the ASP.NET Core role from trusted Firebase Admin data.
+if (firebaseUser.CustomClaims != null &&
+    firebaseUser.CustomClaims.TryGetValue("role", out var role) &&
+    role?.ToString() == "Seller")
+{
+    claims.Add(new Claim(ClaimTypes.Role, "Seller"));
+}
+else
+{
+    claims.Add(new Claim(ClaimTypes.Role, "Buyer"));
+}
 
             var identity = new ClaimsIdentity(
                 claims,
@@ -208,7 +215,7 @@ public class AccountController : Controller
 
             return RedirectToAction("Index", "Parts");
         }
-    }
+    
 
     [HttpPost]
     [Authorize]

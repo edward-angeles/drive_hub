@@ -17,4 +17,6 @@ public class CarPart {
  [Range(0,120)] public int WarrantyMonths { get; set; }
  [Range(0,2000000)] public int? MileageKm { get; set; }
  [StringLength(1000)] public string Description { get; set; } = "";
+
+ public string SellerId { get; set; } = "";
 }
