@@ -1,2 +1,346 @@
 @model CarPart
-<div asp-validation-summary="All" class="error"></div><div class="formgrid"><label>Name<input asp-for="Name"/></label><label>Manufacturer<input asp-for="Manufacturer"/></label><label>Part number<input asp-for="PartNumber"/></label><label>Category<select asp-for="Category" asp-items="Html.GetEnumSelectList<PartType>()"></select></label><label>Condition<select asp-for="Condition" asp-items="Html.GetEnumSelectList<PartCondition>()"></select></label><label>Car-Part grade<select asp-for="Grade" asp-items="Html.GetEnumSelectList<CarPartGrade>()"></select></label><label>Quality score (0–100)<input asp-for="QualityScore" type="number"/></label><label>Price (CAD)<input asp-for="Price" type="number" step="0.01"/></label><label>Quantity<input asp-for="Quantity" type="number"/></label><label>Warranty (months)<input asp-for="WarrantyMonths" type="number"/></label><label>Mileage (km, optional)<input asp-for="MileageKm" type="number"/></label><label>Description<textarea asp-for="Description"></textarea></label></div><button type="submit">Save part</button> <a asp-action="Manage">Cancel</a>
+
+<div asp-validation-summary="All" class="error"></div>
+
+<div class="formgrid">
+
+    <label>
+        Name
+        <input asp-for="Name" />
+    </label>
+
+    <label>
+        Manufacturer
+        <input asp-for="Manufacturer" />
+    </label>
+
+    <label>
+        Part number
+        <input asp-for="PartNumber" />
+    </label>
+
+    <label>
+        Category
+        <select asp-for="Category"
+                asp-items="Html.GetEnumSelectList<PartType>()">
+        </select>
+    </label>
+
+    <label>
+        Condition
+        <select asp-for="Condition"
+                asp-items="Html.GetEnumSelectList<PartCondition>()">
+        </select>
+    </label>
+
+    <label>
+        Car-Part grade
+        <select asp-for="Grade"
+                asp-items="Html.GetEnumSelectList<CarPartGrade>()">
+        </select>
+    </label>
+
+    <label>
+        Quality score (0–100)
+        <input asp-for="QualityScore" type="number" />
+    </label>
+
+    <label>
+        Price (CAD)
+        <input asp-for="Price"
+               type="number"
+               step="0.01" />
+    </label>
+
+    <label>
+        Quantity
+        <input asp-for="Quantity" type="number" />
+    </label>
+
+    <label>
+        Warranty (months)
+        <input asp-for="WarrantyMonths" type="number" />
+    </label>
+
+    <label>
+        Mileage (km, optional)
+        <input asp-for="MileageKm" type="number" />
+    </label>
+
+    <label>
+        Description
+        <textarea asp-for="Description"></textarea>
+    </label>
+
+    <!-- VEHICLE COMPATIBILITY -->
+
+    <label>
+        Compatible vehicle year
+        <select asp-for="VehicleYear" id="VehicleYear">
+            <option value="">Select year</option>
+
+            @for (int year = DateTime.UtcNow.Year + 2;
+                  year >= 1996;
+                  year--)
+            {
+                <option value="@year">@year</option>
+            }
+        </select>
+    </label>
+
+    <label>
+        Compatible vehicle make
+        <select asp-for="VehicleMakeId" id="VehicleMakeId">
+            <option value="">Loading manufacturers...</option>
+        </select>
+    </label>
+
+    <label>
+        Compatible vehicle model
+        <select asp-for="VehicleModelId" id="VehicleModelId">
+            <option value="">Select a year and manufacturer</option>
+        </select>
+    </label>
+
+</div>
+
+<button type="submit">Save part</button>
+
+<a asp-action="Manage">Cancel</a>
+
+<script>
+(function () {
+    async function initializeVehicleSelectors() {
+
+        const yearSelect =
+            document.getElementById("VehicleYear");
+
+        const makeSelect =
+            document.getElementById("VehicleMakeId");
+
+        const modelSelect =
+            document.getElementById("VehicleModelId");
+
+        if (!yearSelect || !makeSelect || !modelSelect) {
+            console.error("Drive Hub: Vehicle selectors not found.");
+            return;
+        }
+
+        const savedMakeId = "@Model.VehicleMakeId";
+        const savedModelId = "@Model.VehicleModelId";
+
+        function resetSelect(select, message) {
+            select.replaceChildren(new Option(message, ""));
+        }
+
+        function getValue(item, ...names) {
+            for (const name of names) {
+                if (item[name] !== undefined &&
+                    item[name] !== null) {
+                    return item[name];
+                }
+            }
+
+            return null;
+        }
+
+        let modelRequestNumber = 0;
+
+        async function loadMakes(selectedId = "") {
+
+            resetSelect(makeSelect, "Loading manufacturers...");
+            resetSelect(modelSelect, "Select model");
+
+            try {
+                const response =
+                    await fetch("/api/vehicles/makes");
+
+                if (!response.ok) {
+                    throw new Error(
+                        `Makes API returned ${response.status}`
+                    );
+                }
+
+                const makes = await response.json();
+
+                if (!Array.isArray(makes)) {
+                    throw new Error(
+                        "Makes API did not return an array."
+                    );
+                }
+
+                resetSelect(makeSelect, "Select manufacturer");
+
+                for (const make of makes) {
+
+                    const name = getValue(
+                        make,
+                        "makeName",
+                        "MakeName",
+                        "Make_Name"
+                    );
+
+                    const id = getValue(
+                        make,
+                        "makeId",
+                        "MakeId",
+                        "Make_ID"
+                    );
+
+                    if (name == null || id == null)
+                        continue;
+
+                    makeSelect.add(
+                        new Option(name, String(id))
+                    );
+                }
+
+                if (selectedId) {
+                    makeSelect.value = selectedId;
+                }
+
+                console.log(
+                    "Drive Hub: Loaded",
+                    makeSelect.options.length - 1,
+                    "vehicle manufacturers."
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "Drive Hub: Unable to load makes:",
+                    error
+                );
+
+                resetSelect(
+                    makeSelect,
+                    "Unable to load manufacturers"
+                );
+            }
+        }
+
+        async function loadModels(selectedId = "") {
+
+            const requestNumber = ++modelRequestNumber;
+
+            resetSelect(modelSelect, "Select model");
+
+            if (!yearSelect.value || !makeSelect.value) {
+                return;
+            }
+
+            resetSelect(modelSelect, "Loading models...");
+
+            const makeId =
+                encodeURIComponent(makeSelect.value);
+
+            const year =
+                encodeURIComponent(yearSelect.value);
+
+            const url =
+                `/api/vehicles/models?makeId=${makeId}&year=${year}`;
+
+            try {
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error(
+                        `Models API returned ${response.status}`
+                    );
+                }
+
+                const models = await response.json();
+
+                if (!Array.isArray(models)) {
+                    throw new Error(
+                        "Models API did not return an array."
+                    );
+                }
+
+                // Ignore outdated requests if the user
+                // changed year or make while loading.
+                if (requestNumber !== modelRequestNumber) {
+                    return;
+                }
+
+                resetSelect(modelSelect, "Select model");
+
+                for (const model of models) {
+
+                    const name = getValue(
+                        model,
+                        "modelName",
+                        "ModelName",
+                        "Model_Name"
+                    );
+
+                    const id = getValue(
+                        model,
+                        "modelId",
+                        "ModelId",
+                        "Model_ID"
+                    );
+
+                    if (name == null || id == null)
+                        continue;
+
+                    modelSelect.add(
+                        new Option(name, String(id))
+                    );
+                }
+
+                if (selectedId) {
+                    modelSelect.value = selectedId;
+                }
+
+                console.log(
+                    "Drive Hub: Loaded",
+                    modelSelect.options.length - 1,
+                    "vehicle models."
+                );
+
+            } catch (error) {
+
+                if (requestNumber !== modelRequestNumber) {
+                    return;
+                }
+
+                console.error(
+                    "Drive Hub: Unable to load models:",
+                    error
+                );
+
+                resetSelect(
+                    modelSelect,
+                    "Unable to load models"
+                );
+            }
+        }
+
+        yearSelect.addEventListener("change", () => {
+            loadModels();
+        });
+
+        makeSelect.addEventListener("change", () => {
+            loadModels();
+        });
+
+        await loadMakes(savedMakeId);
+
+        if (yearSelect.value && makeSelect.value) {
+            await loadModels(savedModelId);
+        }
+    }
+
+    // Works whether this script runs before or after
+    // the browser's DOMContentLoaded event.
+    if (document.readyState === "loading") {
+        document.addEventListener(
+            "DOMContentLoaded",
+            initializeVehicleSelectors
+        );
+    } else {
+        initializeVehicleSelectors();
+    }
+})();
+</script>

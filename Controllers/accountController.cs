@@ -1,5 +1,3 @@
-
-
 using FirebaseAdmin;
 using FirebaseAdmin.Auth;
 using Microsoft.AspNetCore.Authentication;
@@ -29,6 +27,7 @@ public class AccountController : Controller
         _configuration = configuration;
     }
 
+    // REGISTER - GET
     [HttpGet]
     [AllowAnonymous]
     public IActionResult Register()
@@ -36,6 +35,7 @@ public class AccountController : Controller
         return View(new RegisterViewModel());
     }
 
+    // REGISTER - POST
     [HttpPost]
     [AllowAnonymous]
     [ValidateAntiForgeryToken]
@@ -68,6 +68,7 @@ public class AccountController : Controller
         }
     }
 
+    // LOGIN - GET
     [HttpGet]
     [AllowAnonymous]
     public IActionResult Login()
@@ -75,6 +76,7 @@ public class AccountController : Controller
         return View(new LoginViewModel());
     }
 
+    // LOGIN - POST
     [HttpPost]
     [AllowAnonymous]
     [ValidateAntiForgeryToken]
@@ -86,8 +88,10 @@ public class AccountController : Controller
         var apiKey = _configuration["Firebase:WebApiKey"];
 
         if (string.IsNullOrWhiteSpace(apiKey))
+        {
             throw new InvalidOperationException(
                 "Firebase:WebApiKey is not configured.");
+        }
 
         var client = _httpClientFactory.CreateClient();
 
@@ -114,21 +118,42 @@ public class AccountController : Controller
 
             return View(model);
         }
+        catch (TaskCanceledException)
+        {
+            ModelState.AddModelError(
+                "",
+                "Authentication service timed out. Try again.");
 
+            return View(model);
+        }
+
+        // Keep the response alive until its content has been read.
         using (response)
         {
             if (!response.IsSuccessStatusCode)
-{
-    ModelState.AddModelError(
-        "",
-        "Unable to sign in. Please check your email and password.");
+            {
+                ModelState.AddModelError(
+                    "",
+                    "Unable to sign in. Please check your email and password.");
 
-    return View(model);
-}
-}
+                return View(model);
+            }
 
-            var result =
-                await response.Content.ReadFromJsonAsync<FirebaseLoginResponse>();
+            FirebaseLoginResponse? result;
+
+            try
+            {
+                result = await response.Content
+                    .ReadFromJsonAsync<FirebaseLoginResponse>();
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                ModelState.AddModelError(
+                    "",
+                    "Invalid response from authentication service.");
+
+                return View(model);
+            }
 
             if (string.IsNullOrWhiteSpace(result?.IdToken))
             {
@@ -139,12 +164,13 @@ public class AccountController : Controller
                 return View(model);
             }
 
+            // Verify the Firebase ID token server-side.
             FirebaseToken verifiedToken;
 
             try
             {
-                verifiedToken =
-                    await _firebaseAuth.VerifyIdTokenAsync(
+                verifiedToken = await _firebaseAuth
+                    .VerifyIdTokenAsync(
                         result.IdToken,
                         checkRevoked: true);
             }
@@ -157,9 +183,22 @@ public class AccountController : Controller
                 return View(model);
             }
 
-            // Look up the verified Firebase user.
-            var firebaseUser =
-                await _firebaseAuth.GetUserAsync(verifiedToken.Uid);
+            // Retrieve the verified user from Firebase Admin.
+            UserRecord firebaseUser;
+
+            try
+            {
+                firebaseUser = await _firebaseAuth
+                    .GetUserAsync(verifiedToken.Uid);
+            }
+            catch (FirebaseAuthException)
+            {
+                ModelState.AddModelError(
+                    "",
+                    "Unable to retrieve your account.");
+
+                return View(model);
+            }
 
             if (firebaseUser.Disabled)
             {
@@ -170,33 +209,40 @@ public class AccountController : Controller
                 return View(model);
             }
 
+            // Build the authenticated ASP.NET Core identity.
             var claims = new List<Claim>
-{
-    new Claim(
-        ClaimTypes.NameIdentifier,
-        verifiedToken.Uid),
+            {
+                new Claim(
+                    ClaimTypes.NameIdentifier,
+                    verifiedToken.Uid),
 
-    new Claim(
-        ClaimTypes.Name,
-        firebaseUser.DisplayName ??
-        firebaseUser.Email ??
-        "Drive Hub User"),
+                new Claim(
+                    ClaimTypes.Name,
+                    firebaseUser.DisplayName ??
+                    firebaseUser.Email ??
+                    "Drive Hub User"),
 
-    new Claim(
-        ClaimTypes.Email,
-        firebaseUser.Email ?? model.Email)
-};
-// Assign the ASP.NET Core role from trusted Firebase Admin data.
-if (firebaseUser.CustomClaims != null &&
-    firebaseUser.CustomClaims.TryGetValue("role", out var role) &&
-    role?.ToString() == "Seller")
-{
-    claims.Add(new Claim(ClaimTypes.Role, "Seller"));
-}
-else
-{
-    claims.Add(new Claim(ClaimTypes.Role, "Buyer"));
-}
+                new Claim(
+                    ClaimTypes.Email,
+                    firebaseUser.Email ?? model.Email)
+            };
+
+            // Roles are read from trusted Firebase Admin data,
+            // never from a registration or login form field.
+            if (firebaseUser.CustomClaims != null &&
+                firebaseUser.CustomClaims.TryGetValue(
+                    "role",
+                    out var role) &&
+                role?.ToString() == "Seller")
+            {
+                claims.Add(
+                    new Claim(ClaimTypes.Role, "Seller"));
+            }
+            else
+            {
+                claims.Add(
+                    new Claim(ClaimTypes.Role, "Buyer"));
+            }
 
             var identity = new ClaimsIdentity(
                 claims,
@@ -204,6 +250,7 @@ else
 
             var principal = new ClaimsPrincipal(identity);
 
+            // Sign in with the existing two-hour cookie.
             await HttpContext.SignInAsync(
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 principal,
@@ -215,8 +262,9 @@ else
 
             return RedirectToAction("Index", "Parts");
         }
-    
+    }
 
+    // LOGOUT - POST
     [HttpPost]
     [Authorize]
     [ValidateAntiForgeryToken]
@@ -228,6 +276,7 @@ else
         return RedirectToAction(nameof(Login));
     }
 
+    // ACCESS DENIED
     [HttpGet]
     public IActionResult AccessDenied()
     {
@@ -235,6 +284,7 @@ else
     }
 }
 
+// REGISTRATION FORM MODEL
 public class RegisterViewModel
 {
     [Required]
@@ -255,6 +305,7 @@ public class RegisterViewModel
     public string ConfirmPassword { get; set; } = "";
 }
 
+// LOGIN FORM MODEL
 public class LoginViewModel
 {
     [Required]
@@ -266,6 +317,7 @@ public class LoginViewModel
     public string Password { get; set; } = "";
 }
 
+// FIREBASE IDENTITY TOOLKIT RESPONSE
 public class FirebaseLoginResponse
 {
     [JsonPropertyName("idToken")]

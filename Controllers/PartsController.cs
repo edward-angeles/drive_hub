@@ -1,4 +1,3 @@
-
 using DriveHub.Models;
 using DriveHub.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -7,34 +6,68 @@ using System.Security.Claims;
 
 namespace DriveHub.Controllers;
 
-public class PartsController(PartRepository repo) : Controller
+public class PartsController(
+    PartRepository repo,
+    VehicleApiService vehicleApi) : Controller
 {
     // PUBLIC MARKETPLACE
-    // Anyone can browse available parts.
     public async Task<IActionResult> Index(
         string? search,
-        PartType? category)
+        PartType? category,
+        int? vehicleYear,
+        int? vehicleMakeId,
+        int? vehicleModelId)
     {
         var parts = await repo.GetAllAsync();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            parts = parts.Where(p =>
-                p.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                p.Manufacturer.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                p.PartNumber.Contains(search, StringComparison.OrdinalIgnoreCase)
+            parts = parts.Where(part =>
+                part.Name.Contains(
+                    search,
+                    StringComparison.OrdinalIgnoreCase) ||
+                part.Manufacturer.Contains(
+                    search,
+                    StringComparison.OrdinalIgnoreCase) ||
+                part.PartNumber.Contains(
+                    search,
+                    StringComparison.OrdinalIgnoreCase)
             ).ToList();
         }
 
         if (category.HasValue)
         {
-            parts = parts.Where(p =>
-                p.Category == category.Value
+            parts = parts.Where(part =>
+                part.Category == category.Value
+            ).ToList();
+        }
+
+        if (vehicleYear.HasValue)
+        {
+            parts = parts.Where(part =>
+                part.VehicleYear == vehicleYear.Value
+            ).ToList();
+        }
+
+        if (vehicleMakeId.HasValue)
+        {
+            parts = parts.Where(part =>
+                part.VehicleMakeId == vehicleMakeId.Value
+            ).ToList();
+        }
+
+        if (vehicleModelId.HasValue)
+        {
+            parts = parts.Where(part =>
+                part.VehicleModelId == vehicleModelId.Value
             ).ToList();
         }
 
         ViewBag.Search = search;
         ViewBag.Category = category;
+        ViewBag.VehicleYear = vehicleYear;
+        ViewBag.VehicleMakeId = vehicleMakeId;
+        ViewBag.VehicleModelId = vehicleModelId;
 
         return View(parts);
     }
@@ -44,10 +77,9 @@ public class PartsController(PartRepository repo) : Controller
     {
         var part = await repo.GetAsync(id);
 
-        if (part == null)
-            return NotFound();
-
-        return View(part);
+        return part == null
+            ? NotFound()
+            : View(part);
     }
 
     // SELLER DASHBOARD
@@ -62,62 +94,58 @@ public class PartsController(PartRepository repo) : Controller
         if (sellerId == null)
             return Forbid();
 
-        // Only retrieve listings owned by this seller.
         var allParts = await repo.GetBySellerAsync(sellerId);
 
-        // Dashboard statistics
         ViewBag.TotalParts = allParts.Count;
 
         ViewBag.InventoryValue = allParts.Sum(
-            p => p.Price * p.Quantity
-        );
+            part => part.Price * part.Quantity);
 
         ViewBag.LowStock = allParts.Count(
-            p => p.Quantity > 0 && p.Quantity <= 5
-        );
+            part => part.Quantity > 0 &&
+                    part.Quantity <= 5);
 
         ViewBag.OutOfStock = allParts.Count(
-            p => p.Quantity == 0
-        );
+            part => part.Quantity == 0);
 
         var parts = allParts.AsEnumerable();
 
-        // Search
         if (!string.IsNullOrWhiteSpace(search))
         {
-            parts = parts.Where(p =>
-                p.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                p.Manufacturer.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                p.PartNumber.Contains(search, StringComparison.OrdinalIgnoreCase)
+            parts = parts.Where(part =>
+                part.Name.Contains(
+                    search,
+                    StringComparison.OrdinalIgnoreCase) ||
+                part.Manufacturer.Contains(
+                    search,
+                    StringComparison.OrdinalIgnoreCase) ||
+                part.PartNumber.Contains(
+                    search,
+                    StringComparison.OrdinalIgnoreCase)
             );
         }
 
-        // Category filter
         if (category.HasValue)
         {
-            parts = parts.Where(p =>
-                p.Category == category.Value
-            );
+            parts = parts.Where(part =>
+                part.Category == category.Value);
         }
 
-        // Stock filters
         if (stock == "low")
         {
-            parts = parts.Where(p =>
-                p.Quantity > 0 && p.Quantity <= 5
-            );
+            parts = parts.Where(part =>
+                part.Quantity > 0 &&
+                part.Quantity <= 5);
         }
         else if (stock == "out")
         {
-            parts = parts.Where(p =>
-                p.Quantity == 0
-            );
+            parts = parts.Where(part =>
+                part.Quantity == 0);
         }
         else if (stock == "available")
         {
-            parts = parts.Where(p =>
-                p.Quantity > 0
-            );
+            parts = parts.Where(part =>
+                part.Quantity > 0);
         }
 
         ViewBag.Search = search;
@@ -140,7 +168,7 @@ public class PartsController(PartRepository repo) : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
-        [Bind("Name,Manufacturer,PartNumber,Category,Condition,Grade,QualityScore,Price,Quantity,WarrantyMonths,MileageKm,Description")]
+        [Bind("Name,Manufacturer,PartNumber,Category,Condition,Grade,QualityScore,Price,Quantity,WarrantyMonths,MileageKm,Description,VehicleYear,VehicleMakeId,VehicleModelId")]
         CarPart part)
     {
         var sellerId = GetSellerId();
@@ -151,8 +179,9 @@ public class PartsController(PartRepository repo) : Controller
         if (!ModelState.IsValid)
             return View(part);
 
-        // Seller ownership comes from the authenticated user,
-        // not from the submitted form.
+        if (!await ValidateVehicleAsync(part))
+            return View(part);
+
         await repo.AddForSellerAsync(part, sellerId);
 
         return RedirectToAction(nameof(Manage));
@@ -185,7 +214,7 @@ public class PartsController(PartRepository repo) : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(
         string id,
-        [Bind("Name,Manufacturer,PartNumber,Category,Condition,Grade,QualityScore,Price,Quantity,WarrantyMonths,MileageKm,Description")]
+        [Bind("Name,Manufacturer,PartNumber,Category,Condition,Grade,QualityScore,Price,Quantity,WarrantyMonths,MileageKm,Description,VehicleYear,VehicleMakeId,VehicleModelId")]
         CarPart part)
     {
         var sellerId = GetSellerId();
@@ -193,19 +222,17 @@ public class PartsController(PartRepository repo) : Controller
         if (sellerId == null)
             return Forbid();
 
-        if (!ModelState.IsValid)
-        {
-            part.Id = id;
-            return View(part);
-        }
-
-        // Never accept a document ID or owner ID from form data.
         part.Id = id;
+
+        if (!ModelState.IsValid)
+            return View(part);
+
+        if (!await ValidateVehicleAsync(part))
+            return View(part);
 
         var updated = await repo.UpdateForSellerAsync(
             part,
-            sellerId
-        );
+            sellerId);
 
         if (!updated)
             return NotFound();
@@ -239,7 +266,8 @@ public class PartsController(PartRepository repo) : Controller
     [HttpPost]
     [ActionName("Delete")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteConfirmed(string id)
+    public async Task<IActionResult> DeleteConfirmed(
+        string id)
     {
         var sellerId = GetSellerId();
 
@@ -248,8 +276,7 @@ public class PartsController(PartRepository repo) : Controller
 
         var deleted = await repo.DeleteForSellerAsync(
             id,
-            sellerId
-        );
+            sellerId);
 
         if (!deleted)
             return NotFound();
@@ -257,12 +284,101 @@ public class PartsController(PartRepository repo) : Controller
         return RedirectToAction(nameof(Manage));
     }
 
-    // Retrieve the verified Firebase UID from the login cookie.
+    // CURRENT AUTHENTICATED SELLER
     private string? GetSellerId()
     {
         return User.FindFirstValue(
-            ClaimTypes.NameIdentifier
-        );
+            ClaimTypes.NameIdentifier);
+    }
+
+    // VALIDATE VEHICLE AGAINST NHTSA
+    private async Task<bool> ValidateVehicleAsync(
+        CarPart part)
+    {
+        if (part.VehicleYear == null &&
+            part.VehicleMakeId == null &&
+            part.VehicleModelId == null)
+        {
+            part.VehicleMakeName = "";
+            part.VehicleModelName = "";
+            return true;
+        }
+
+        if (part.VehicleYear == null ||
+            part.VehicleMakeId == null ||
+            part.VehicleModelId == null)
+        {
+            ModelState.AddModelError(
+                "",
+                "Select a vehicle year, make, and model.");
+
+            return false;
+        }
+
+        if (part.VehicleYear < 1996 ||
+            part.VehicleYear > DateTime.UtcNow.Year + 2 ||
+            part.VehicleMakeId <= 0 ||
+            part.VehicleModelId <= 0)
+        {
+            ModelState.AddModelError(
+                "",
+                "Invalid vehicle selection.");
+
+            return false;
+        }
+
+        try
+        {
+            var makes = await vehicleApi.GetMakesAsync();
+
+            var make = makes.FirstOrDefault(
+                item => item.MakeId == part.VehicleMakeId);
+
+            if (make == null)
+            {
+                ModelState.AddModelError(
+                    "",
+                    "The selected manufacturer was not found.");
+
+                return false;
+            }
+
+            var models = await vehicleApi.GetModelsAsync(
+                make.MakeId,
+                part.VehicleYear.Value);
+
+            var model = models.FirstOrDefault(
+                item => item.ModelId == part.VehicleModelId);
+
+            if (model == null)
+            {
+                ModelState.AddModelError(
+                    "",
+                    "The selected model is not valid for this vehicle.");
+
+                return false;
+            }
+
+            part.VehicleMakeName = make.MakeName;
+            part.VehicleModelName = model.ModelName;
+
+            return true;
+        }
+        catch (HttpRequestException)
+        {
+            ModelState.AddModelError(
+                "",
+                "Vehicle service unavailable. Please try again.");
+
+            return false;
+        }
+        catch (TaskCanceledException)
+        {
+            ModelState.AddModelError(
+                "",
+                "Vehicle service timed out. Please try again.");
+
+            return false;
+        }
     }
 }
-

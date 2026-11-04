@@ -8,75 +8,116 @@ public class PartRepository(FirestoreDb db)
 {
     private CollectionReference Parts => db.Collection("parts");
 
-    private static CarPart FromSnapshot(DocumentSnapshot s)
+    // Convert a Firestore document into a CarPart.
+    private static CarPart FromSnapshot(DocumentSnapshot snapshot)
     {
-        var d = s.ToDictionary();
+        var data = snapshot.ToDictionary();
 
-        T Get<T>(string key, T fallback = default!) =>
-            d.TryGetValue(key, out var v) && v is not null
-                ? (T)Convert.ChangeType(v, typeof(T))
-                : fallback;
+        T Get<T>(string key, T fallback = default!)
+        {
+            if (!data.TryGetValue(key, out var value) ||
+                value is null)
+            {
+                return fallback;
+            }
+
+            return (T)Convert.ChangeType(value, typeof(T));
+        }
+
+        int? GetNullableInt(string key)
+        {
+            if (!data.TryGetValue(key, out var value) ||
+                value is null)
+            {
+                return null;
+            }
+
+            return Convert.ToInt32(value);
+        }
 
         return new CarPart
         {
-            Id = s.Id,
+            Id = snapshot.Id,
+            SellerId = Get("sellerId", ""),
+
             Name = Get("name", ""),
             Manufacturer = Get("manufacturer", ""),
             PartNumber = Get("partNumber", ""),
+
             Category = (PartType)Get("category", 0),
             Condition = (PartCondition)Get("condition", 0),
             Grade = (CarPartGrade)Get("grade", 0),
+
             QualityScore = Get("qualityScore", 80),
             Price = Get("priceCents", 0L) / 100m,
             Quantity = Get("quantity", 0),
             WarrantyMonths = Get("warrantyMonths", 0),
-            MileageKm = d.TryGetValue("mileageKm", out var mileage)
-                && mileage is not null
-                    ? Convert.ToInt32(mileage)
-                    : null,
+            MileageKm = GetNullableInt("mileageKm"),
             Description = Get("description", ""),
-            SellerId = Get("sellerId", "")
+
+            VehicleYear = GetNullableInt("vehicleYear"),
+            VehicleMakeId = GetNullableInt("vehicleMakeId"),
+            VehicleMakeName = Get("vehicleMakeName", ""),
+            VehicleModelId = GetNullableInt("vehicleModelId"),
+            VehicleModelName = Get("vehicleModelName", "")
         };
     }
 
-    private static Dictionary<string, object?> ToData(CarPart p) => new()
+    // Convert a CarPart into Firestore fields.
+    private static Dictionary<string, object?> ToData(CarPart part)
     {
-        ["name"] = p.Name,
-        ["manufacturer"] = p.Manufacturer,
-        ["partNumber"] = p.PartNumber,
-        ["category"] = (int)p.Category,
-        ["condition"] = (int)p.Condition,
-        ["grade"] = (int)p.Grade,
-        ["qualityScore"] = p.QualityScore,
-        ["priceCents"] = decimal.ToInt64(p.Price * 100m),
-        ["quantity"] = p.Quantity,
-        ["warrantyMonths"] = p.WarrantyMonths,
-        ["mileageKm"] = p.MileageKm,
-        ["description"] = p.Description,
-        ["sellerId"] = p.SellerId
-    };
+        return new Dictionary<string, object?>
+        {
+            ["sellerId"] = part.SellerId,
 
-    // Public marketplace: all listings
+            ["name"] = part.Name,
+            ["manufacturer"] = part.Manufacturer,
+            ["partNumber"] = part.PartNumber,
+
+            ["category"] = (int)part.Category,
+            ["condition"] = (int)part.Condition,
+            ["grade"] = (int)part.Grade,
+
+            ["qualityScore"] = part.QualityScore,
+            ["priceCents"] = decimal.ToInt64(part.Price * 100m),
+            ["quantity"] = part.Quantity,
+            ["warrantyMonths"] = part.WarrantyMonths,
+            ["mileageKm"] = part.MileageKm,
+            ["description"] = part.Description,
+
+            ["vehicleYear"] = part.VehicleYear,
+            ["vehicleMakeId"] = part.VehicleMakeId,
+            ["vehicleMakeName"] = part.VehicleMakeName,
+            ["vehicleModelId"] = part.VehicleModelId,
+            ["vehicleModelName"] = part.VehicleModelName
+        };
+    }
+
+    // PUBLIC MARKETPLACE
     public async Task<List<CarPart>> GetAllAsync()
     {
         var snapshot = await Parts.GetSnapshotAsync();
 
         return snapshot.Documents
             .Select(FromSnapshot)
-            .OrderBy(p => p.Name)
+            .OrderBy(part => part.Name)
             .ToList();
     }
 
-    // Public listing details
+    // PUBLIC PART DETAILS
     public async Task<CarPart?> GetAsync(string id)
     {
-        var snapshot = await Parts.Document(id).GetSnapshotAsync();
+        var snapshot = await Parts.Document(id)
+            .GetSnapshotAsync();
 
-        return snapshot.Exists ? FromSnapshot(snapshot) : null;
+        return snapshot.Exists
+            ? FromSnapshot(snapshot)
+            : null;
     }
 
-    // Seller dashboard: only the seller's listings
-    public async Task<List<CarPart>> GetBySellerAsync(string sellerId)
+    // SELLER DASHBOARD
+    public async Task<List<CarPart>> GetBySellerAsync(
+        string sellerId)
     {
         if (string.IsNullOrWhiteSpace(sellerId))
             throw new ArgumentException("Seller ID is required.");
@@ -87,12 +128,14 @@ public class PartRepository(FirestoreDb db)
 
         return snapshot.Documents
             .Select(FromSnapshot)
-            .OrderBy(p => p.Name)
+            .OrderBy(part => part.Name)
             .ToList();
     }
 
-    // New listings receive ownership from the server
-    public async Task AddForSellerAsync(CarPart part, string sellerId)
+    // CREATE SELLER-OWNED PART
+    public async Task AddForSellerAsync(
+        CarPart part,
+        string sellerId)
     {
         if (string.IsNullOrWhiteSpace(sellerId))
             throw new ArgumentException("Seller ID is required.");
@@ -103,7 +146,7 @@ public class PartRepository(FirestoreDb db)
         await Parts.AddAsync(ToData(part));
     }
 
-    // Atomically check ownership and update the listing
+    // UPDATE ONLY IF THE SELLER OWNS THE PART
     public async Task<bool> UpdateForSellerAsync(
         CarPart part,
         string sellerId)
@@ -111,29 +154,31 @@ public class PartRepository(FirestoreDb db)
         if (string.IsNullOrWhiteSpace(sellerId))
             return false;
 
-        var doc = Parts.Document(part.Id);
+        var document = Parts.Document(part.Id);
 
-        return await db.RunTransactionAsync(async transaction =>
-        {
-            var snapshot = await transaction.GetSnapshotAsync(doc);
+        return await db.RunTransactionAsync(
+            async transaction =>
+            {
+                var snapshot =
+                    await transaction.GetSnapshotAsync(document);
 
-            if (!snapshot.Exists)
-                return false;
+                if (!snapshot.Exists)
+                    return false;
 
-            var existing = FromSnapshot(snapshot);
+                var existing = FromSnapshot(snapshot);
 
-            if (existing.SellerId != sellerId)
-                return false;
+                if (existing.SellerId != sellerId)
+                    return false;
 
-            part.SellerId = existing.SellerId;
+                part.SellerId = existing.SellerId;
 
-            transaction.Set(doc, ToData(part));
+                transaction.Set(document, ToData(part));
 
-            return true;
-        });
+                return true;
+            });
     }
 
-    // Atomically check ownership and delete the listing
+    // DELETE ONLY IF THE SELLER OWNS THE PART
     public async Task<bool> DeleteForSellerAsync(
         string id,
         string sellerId)
@@ -141,51 +186,26 @@ public class PartRepository(FirestoreDb db)
         if (string.IsNullOrWhiteSpace(sellerId))
             return false;
 
-        var doc = Parts.Document(id);
+        var document = Parts.Document(id);
 
-        return await db.RunTransactionAsync(async transaction =>
-        {
-            var snapshot = await transaction.GetSnapshotAsync(doc);
+        return await db.RunTransactionAsync(
+            async transaction =>
+            {
+                var snapshot =
+                    await transaction.GetSnapshotAsync(document);
 
-            if (!snapshot.Exists)
-                return false;
+                if (!snapshot.Exists)
+                    return false;
 
-            var existing = FromSnapshot(snapshot);
+                var existing = FromSnapshot(snapshot);
 
-            if (existing.SellerId != sellerId)
-                return false;
+                if (existing.SellerId != sellerId)
+                    return false;
 
-            transaction.Delete(doc);
+                transaction.Delete(document);
 
-            return true;
-        });
-    }
-
-    // Existing CRUD methods retained temporarily.
-    // Remove these once PartsController uses the secured methods.
-
-    public async Task AddAsync(CarPart part) =>
-        await Parts.AddAsync(ToData(part));
-
-    public async Task<bool> UpdateAsync(CarPart part)
-    {
-        var doc = Parts.Document(part.Id);
-
-        if (!(await doc.GetSnapshotAsync()).Exists)
-            return false;
-
-        await doc.SetAsync(ToData(part));
-        return true;
-    }
-
-    public async Task<bool> DeleteAsync(string id)
-    {
-        var doc = Parts.Document(id);
-
-        if (!(await doc.GetSnapshotAsync()).Exists)
-            return false;
-
-        await doc.DeleteAsync();
-        return true;
+                return true;
+            });
     }
 }
+

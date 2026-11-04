@@ -1,5 +1,342 @@
+
 @model List<CarPart>
-@{ ViewData["Title"] = "Marketplace"; }
-<section class="hero"><h1>Find your next part.</h1><p>Browse car parts by brand, category and condition.</p></section>
-<form method="get" class="filters"><input name="search" value="@ViewBag.Search" placeholder="Search parts, brand or part number"/><select name="category"><option value="">All categories</option>@foreach(var c in Enum.GetValues<PartType>()){if(ViewBag.Category is PartType selected && selected==c){<option selected value="@c">@c</option>}else{<option value="@c">@c</option>}}</select><button type="submit">Search</button><a asp-action="Index">Reset</a></form>
-<div class="grid">@foreach(var p in Model){<article class="card"><span class="eyebrow">@p.Category • @p.Condition</span><h2>@p.Name</h2><p>@p.Manufacturer · @p.PartNumber</p><p>Quality: @p.QualityScore/100 · Grade: @p.Grade</p><strong class="price">@p.Price.ToString("C")</strong><p>@p.Quantity in stock</p><a class="button" asp-action="Details" asp-route-id="@p.Id">View part</a></article>}</div>@if(!Model.Any()){<p>No matching parts found.</p>}
+
+@{
+    ViewData["Title"] = "Marketplace";
+
+    string currentSearch = ViewBag.Search as string ?? "";
+    string currentYear = ViewBag.VehicleYear?.ToString() ?? "";
+    string currentMakeId = ViewBag.VehicleMakeId?.ToString() ?? "";
+    string currentModelId = ViewBag.VehicleModelId?.ToString() ?? "";
+}
+
+<section class="hero">
+    <h1>Find your next part.</h1>
+    <p>
+        Browse car parts by brand, category,
+        condition, and compatible vehicle.
+    </p>
+</section>
+
+<form method="get" asp-action="Index" class="filters">
+
+    <input
+        name="search"
+        value="@currentSearch"
+        placeholder="Search parts, brand or part number" />
+
+    <select name="category">
+        <option value="">All categories</option>
+
+        @foreach (var category in Enum.GetValues<PartType>())
+        {
+            if (ViewBag.Category is PartType selected &&
+                selected == category)
+            {
+                <option value="@category" selected>
+                    @category
+                </option>
+            }
+            else
+            {
+                <option value="@category">
+                    @category
+                </option>
+            }
+        }
+    </select>
+
+    <select name="vehicleYear" id="FilterVehicleYear">
+        <option value="">All vehicle years</option>
+
+        @for (int year = DateTime.UtcNow.Year + 2;
+              year >= 1996;
+              year--)
+        {
+            if (currentYear == year.ToString())
+            {
+                <option value="@year" selected>@year</option>
+            }
+            else
+            {
+                <option value="@year">@year</option>
+            }
+        }
+    </select>
+
+    <select name="vehicleMakeId" id="FilterVehicleMake">
+        <option value="">All vehicle makes</option>
+    </select>
+
+    <select name="vehicleModelId" id="FilterVehicleModel">
+        <option value="">All vehicle models</option>
+    </select>
+
+    <button type="submit">Search</button>
+
+    <a asp-action="Index">Reset</a>
+
+</form>
+
+<div class="grid">
+
+    @foreach (var part in Model)
+    {
+        <article class="card">
+
+            <span class="eyebrow">
+                @part.Category • @part.Condition
+            </span>
+
+            <h2>@part.Name</h2>
+
+            <p>
+                @part.Manufacturer · @part.PartNumber
+            </p>
+
+            <p>
+                Quality: @part.QualityScore/100
+                · Grade: @part.Grade
+            </p>
+
+            @if (part.VehicleYear.HasValue &&
+                 !string.IsNullOrWhiteSpace(part.VehicleMakeName) &&
+                 !string.IsNullOrWhiteSpace(part.VehicleModelName))
+            {
+                <p>
+                    <strong>Vehicle:</strong>
+                    @part.VehicleYear
+                    @part.VehicleMakeName
+                    @part.VehicleModelName
+                </p>
+            }
+            else
+            {
+                <p>Vehicle compatibility not specified</p>
+            }
+
+            <strong class="price">
+                @part.Price.ToString("C")
+            </strong>
+
+            <p>@part.Quantity in stock</p>
+
+            <a class="button"
+               asp-action="Details"
+               asp-route-id="@part.Id">
+                View part
+            </a>
+
+        </article>
+    }
+
+</div>
+
+@if (!Model.Any())
+{
+    <p>No matching parts found.</p>
+}
+
+<script>
+(function () {
+
+    async function initializeVehicleFilters() {
+
+        const yearSelect =
+            document.getElementById("FilterVehicleYear");
+
+        const makeSelect =
+            document.getElementById("FilterVehicleMake");
+
+        const modelSelect =
+            document.getElementById("FilterVehicleModel");
+
+        if (!yearSelect || !makeSelect || !modelSelect)
+            return;
+
+        const savedMakeId = "@currentMakeId";
+        const savedModelId = "@currentModelId";
+
+        let modelRequestNumber = 0;
+
+        function resetSelect(select, label) {
+            select.replaceChildren(new Option(label, ""));
+        }
+
+        function getValue(item, ...names) {
+            for (const name of names) {
+                if (item[name] !== undefined &&
+                    item[name] !== null) {
+                    return item[name];
+                }
+            }
+
+            return null;
+        }
+
+        async function loadMakes(selectedId = "") {
+
+            resetSelect(makeSelect, "Loading makes...");
+            resetSelect(modelSelect, "All vehicle models");
+
+            try {
+                const response =
+                    await fetch("/api/vehicles/makes");
+
+                if (!response.ok)
+                    throw new Error(`Makes API: ${response.status}`);
+
+                const makes = await response.json();
+
+                if (!Array.isArray(makes))
+                    throw new Error("Invalid makes response");
+
+                resetSelect(makeSelect, "All vehicle makes");
+
+                for (const make of makes) {
+
+                    const name = getValue(
+                        make,
+                        "makeName",
+                        "MakeName",
+                        "Make_Name"
+                    );
+
+                    const id = getValue(
+                        make,
+                        "makeId",
+                        "MakeId",
+                        "Make_ID"
+                    );
+
+                    if (name == null || id == null)
+                        continue;
+
+                    makeSelect.add(
+                        new Option(name, String(id))
+                    );
+                }
+
+                if (selectedId &&
+                    Array.from(makeSelect.options)
+                        .some(option => option.value === selectedId))
+                {
+                    makeSelect.value = selectedId;
+                }
+
+            } catch (error) {
+                console.error(
+                    "Drive Hub: Could not load vehicle makes",
+                    error
+                );
+
+                resetSelect(makeSelect, "Makes unavailable");
+            }
+        }
+
+        async function loadModels(selectedId = "") {
+
+            const requestNumber = ++modelRequestNumber;
+
+            resetSelect(modelSelect, "All vehicle models");
+
+            if (!yearSelect.value || !makeSelect.value)
+                return;
+
+            resetSelect(modelSelect, "Loading models...");
+
+            const makeId =
+                encodeURIComponent(makeSelect.value);
+
+            const year =
+                encodeURIComponent(yearSelect.value);
+
+            const url =
+                `/api/vehicles/models?makeId=${makeId}&year=${year}`;
+
+            try {
+                const response = await fetch(url);
+
+                if (!response.ok)
+                    throw new Error(`Models API: ${response.status}`);
+
+                const models = await response.json();
+
+                if (!Array.isArray(models))
+                    throw new Error("Invalid models response");
+
+                if (requestNumber !== modelRequestNumber)
+                    return;
+
+                resetSelect(modelSelect, "All vehicle models");
+
+                for (const model of models) {
+
+                    const name = getValue(
+                        model,
+                        "modelName",
+                        "ModelName",
+                        "Model_Name"
+                    );
+
+                    const id = getValue(
+                        model,
+                        "modelId",
+                        "ModelId",
+                        "Model_ID"
+                    );
+
+                    if (name == null || id == null)
+                        continue;
+
+                    modelSelect.add(
+                        new Option(name, String(id))
+                    );
+                }
+
+                if (selectedId &&
+                    Array.from(modelSelect.options)
+                        .some(option => option.value === selectedId))
+                {
+                    modelSelect.value = selectedId;
+                }
+
+            } catch (error) {
+
+                if (requestNumber !== modelRequestNumber)
+                    return;
+
+                console.error(
+                    "Drive Hub: Could not load vehicle models",
+                    error
+                );
+
+                resetSelect(modelSelect, "Models unavailable");
+            }
+        }
+
+        yearSelect.addEventListener("change", () => {
+            loadModels();
+        });
+
+        makeSelect.addEventListener("change", () => {
+            loadModels();
+        });
+
+        await loadMakes(savedMakeId);
+
+        if (yearSelect.value && makeSelect.value)
+            await loadModels(savedModelId);
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener(
+            "DOMContentLoaded",
+            initializeVehicleFilters
+        );
+    } else {
+        initializeVehicleFilters();
+    }
+
+})();
+</script>
