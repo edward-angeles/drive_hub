@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 // MVC controllers and Razor views
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient<VehicleApiService>();
 
 // Firebase project configuration
 var projectId = builder.Configuration["Firebase:ProjectId"];
@@ -72,6 +73,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // Default homepage remains the buyer marketplace
+app.MapControllers();
+
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Parts}/{action=Index}/{id?}");
