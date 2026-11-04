@@ -1,2 +1,187 @@
 @model List<CarPart>
-<h1>Seller inventory (demo)</h1><p>This is an unsecured development-only screen. Authentication and role restrictions are next.</p><p><a class="button" asp-action="Create">+ Add part</a></p><div class="tablewrap"><table><thead><tr><th>Part</th><th>Category</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead><tbody>@foreach(var p in Model){<tr><td>@p.Name</td><td>@p.Category</td><td>@p.Price.ToString("C")</td><td>@p.Quantity</td><td><a asp-action="Edit" asp-route-id="@p.Id">Edit</a> · <a asp-action="Delete" asp-route-id="@p.Id">Delete</a></td></tr>}</tbody></table></div>
+@using DriveHub.Models
+
+@{
+    ViewData["Title"] = "Seller Dashboard";
+
+    int totalParts = ViewBag.TotalParts;
+    decimal inventoryValue = ViewBag.InventoryValue;
+    int lowStock = ViewBag.LowStock;
+    int outOfStock = ViewBag.OutOfStock;
+
+    string search = ViewBag.Search ?? "";
+    string stock = ViewBag.Stock ?? "";
+    PartType? category = ViewBag.Category;
+}
+
+<div class="seller-dashboard">
+
+    <div class="seller-heading">
+        <div>
+            <p class="seller-eyebrow">DRIVE HUB / SELLER PORTAL</p>
+            <h1>Inventory Dashboard</h1>
+            <p>Manage your automotive parts and monitor inventory.</p>
+        </div>
+
+        <a asp-action="Create" class="seller-add-button">
+            + Add New Part
+        </a>
+    </div>
+
+    <div class="seller-notice">
+        Demo mode: seller authentication and role restrictions
+        have not yet been implemented.
+    </div>
+
+    <div class="seller-stats">
+
+        <div class="seller-stat-card">
+            <span>Total Parts</span>
+            <strong>@totalParts</strong>
+            <small>Inventory listings</small>
+        </div>
+
+        <div class="seller-stat-card">
+            <span>Inventory Value</span>
+            <strong>@inventoryValue.ToString("C")</strong>
+            <small>Price multiplied by quantity</small>
+        </div>
+
+        <div class="seller-stat-card">
+            <span>Low Stock</span>
+            <strong>@lowStock</strong>
+            <small>1–5 units remaining</small>
+        </div>
+
+        <div class="seller-stat-card">
+            <span>Out of Stock</span>
+            <strong>@outOfStock</strong>
+            <small>No units remaining</small>
+        </div>
+
+    </div>
+
+    <section class="seller-inventory-panel">
+
+        <div class="seller-panel-heading">
+            <h2>Inventory Management</h2>
+            <span>@Model.Count matching parts</span>
+        </div>
+
+        <form method="get" asp-action="Manage"
+              class="seller-filters">
+
+            <input type="text"
+                   name="search"
+                   value="@search"
+                   placeholder="Search parts, brands or numbers..." />
+
+            <select name="category">
+                <option value="">All categories</option>
+
+                @foreach (var type in Enum.GetValues<PartType>())
+                {
+                    if (category == type)
+                    {
+                        <option value="@type" selected>@type</option>
+                    }
+                    else
+                    {
+                        <option value="@type">@type</option>
+                    }
+                }
+            </select>
+
+            <select name="stock">
+                <option value="">All stock levels</option>
+                <option value="available"
+                        selected="@(stock == "available")">
+                    In stock
+                </option>
+                <option value="low"
+                        selected="@(stock == "low")">
+                    Low stock
+                </option>
+                <option value="out"
+                        selected="@(stock == "out")">
+                    Out of stock
+                </option>
+            </select>
+
+            <button type="submit">Apply Filters</button>
+
+            <a asp-action="Manage" class="seller-clear-button">
+                Clear
+            </a>
+        </form>
+
+        <div class="tablewrap">
+            <table class="seller-table">
+                <thead>
+                    <tr>
+                        <th>Part</th>
+                        <th>Category</th>
+                        <th>Price</th>
+                        <th>Stock</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var p in Model)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@p.Name</strong>
+                                <small>@p.Manufacturer</small>
+                                <small>@p.PartNumber</small>
+                            </td>
+
+                            <td>@p.Category</td>
+                            <td>@p.Price.ToString("C")</td>
+                            <td>@p.Quantity</td>
+
+                            <td>
+                                @if (p.Quantity == 0)
+                                {
+                                    <span class="seller-status out">
+                                        Out of Stock
+                                    </span>
+                                }
+                                else if (p.Quantity <= 5)
+                                {
+                                    <span class="seller-status low">
+                                        Low Stock
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="seller-status good">
+                                        In Stock
+                                    </span>
+                                }
+                            </td>
+
+                            <td>
+                                <a asp-action="Edit"
+                                   asp-route-id="@p.Id">Edit</a>
+                                |
+                                <a asp-action="Delete"
+                                   asp-route-id="@p.Id">Delete</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (!Model.Any())
+        {
+            <p class="seller-empty">
+                No parts match your filters.
+            </p>
+        }
+
+    </section>
+</div>
