@@ -1,1 +1,22 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Drive Hub</title><link rel="stylesheet" href="~/css/site.css"/></head><body><header><a class="brand" asp-controller="Parts" asp-action="Index">DRIVE HUB</a><nav><a asp-controller="Parts" asp-action="Index">Marketplace</a><a asp-controller="Parts" asp-action="Manage">Seller demo</a></nav></header><main>@RenderBody()</main><footer>Drive Hub • Educational prototype • No real purchases</footer>@await RenderSectionAsync("Scripts",required:false)</body></html>
+@if (User.Identity?.IsAuthenticated == true)
+{
+    <span>Hello, @User.Identity.Name!</span>
+
+    <form asp-controller="Account"
+          asp-action="Logout"
+          method="post"
+          style="display:inline;">
+        <button type="submit">Logout</button>
+    </form>
+}
+else
+{
+    <a asp-controller="Account" asp-action="Login">
+        Login
+    </a>
+
+    <a asp-controller="Account" asp-action="Register">
+        Register
+    </a>
+}

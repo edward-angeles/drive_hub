@@ -1,0 +1,53 @@
+
+@model DriveHub.Controllers.RegisterViewModel
+
+@{
+    ViewData["Title"] = "Create Account";
+}
+
+<div class="seller-dashboard" style="max-width: 520px;">
+    <h1>Create your Drive Hub account</h1>
+    <p>Join Drive Hub to discover automotive parts.</p>
+
+    <form asp-controller="Account"
+          asp-action="Register"
+          method="post">
+
+        <div asp-validation-summary="All"
+             style="color: #dc2626;"></div>
+
+        <p>
+            <label asp-for="FullName">Full Name</label>
+            <input asp-for="FullName" class="form-control" />
+            <span asp-validation-for="FullName"></span>
+        </p>
+
+        <p>
+            <label asp-for="Email">Email Address</label>
+            <input asp-for="Email" class="form-control" />
+            <span asp-validation-for="Email"></span>
+        </p>
+
+        <p>
+            <label asp-for="Password">Password</label>
+            <input asp-for="Password"
+                   type="password"
+                   class="form-control" />
+            <span asp-validation-for="Password"></span>
+        </p>
+
+        <p>
+            <label asp-for="ConfirmPassword">
+                Confirm Password
+            </label>
+            <input asp-for="ConfirmPassword"
+                   type="password"
+                   class="form-control" />
+            <span asp-validation-for="ConfirmPassword"></span>
+        </p>
+
+        <button type="submit" class="seller-add-button">
+            Create Account
+        </button>
+    </form>
+</div>

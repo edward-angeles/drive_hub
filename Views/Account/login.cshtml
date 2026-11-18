@@ -1,0 +1,53 @@
+
+@model DriveHub.Controllers.LoginViewModel
+
+@{
+    ViewData["Title"] = "Login";
+}
+
+<div class="seller-dashboard" style="max-width: 520px;">
+
+    <h1>Welcome Back</h1>
+    <p>Sign in to your Drive Hub account.</p>
+
+    @if (TempData["Success"] != null)
+    {
+        <p style="color: green;">
+            @TempData["Success"]
+        </p>
+    }
+
+    <form asp-controller="Account"
+          asp-action="Login"
+          method="post">
+
+        <div asp-validation-summary="All"
+             style="color: #dc2626;"></div>
+
+        <p>
+            <label asp-for="Email">Email Address</label>
+            <input asp-for="Email"
+                   class="form-control"
+                   autocomplete="email" />
+        </p>
+
+        <p>
+            <label asp-for="Password">Password</label>
+            <input asp-for="Password"
+                   type="password"
+                   class="form-control"
+                   autocomplete="current-password" />
+        </p>
+
+        <button type="submit" class="seller-add-button">
+            Sign In
+        </button>
+
+    </form>
+
+    <p style="margin-top: 25px;">
+        Don't have an account?
+        <a asp-action="Register">Register here</a>
+    </p>
+
+</div>

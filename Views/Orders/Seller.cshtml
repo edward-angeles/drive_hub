@@ -1,0 +1,332 @@
+@model List<DriveHub.Models.OrderItem>
+@using DriveHub.Models
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Seller Orders";
+
+    var items = Model ?? new List<OrderItem>();
+    var cad = CultureInfo.GetCultureInfo("en-CA");
+
+    var totalItems = items.Count;
+    var pendingItems = items.Count(x =>
+        x.FulfillmentStatus == FulfillmentStatus.Pending);
+
+    var shippedItems = items.Count(x =>
+        x.FulfillmentStatus == FulfillmentStatus.Shipped);
+
+    var completedItems = items.Count(x =>
+        x.FulfillmentStatus == FulfillmentStatus.Completed);
+
+    var merchandiseValue = items.Sum(x => x.LineTotalCents);
+}
+
+<div class="container py-4">
+
+    <!-- Page heading -->
+    <div class="d-flex justify-content-between
+                align-items-center flex-wrap gap-3 mb-4">
+
+        <div>
+            <h1 class="fw-bold mb-1">Seller Orders</h1>
+
+            <p class="text-muted mb-0">
+                Manage customer purchases and fulfillment.
+            </p>
+        </div>
+
+        <a asp-controller="Parts"
+           asp-action="Manage"
+           class="btn btn-outline-secondary">
+            Back to Inventory
+        </a>
+
+    </div>
+
+    <!-- Messages -->
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">
+            @TempData["Success"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">
+            @TempData["Error"]
+        </div>
+    }
+
+    <!-- Summary cards -->
+    <div class="row g-3 mb-4">
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Order Items</p>
+                    <h3 class="fw-bold mb-0">@totalItems</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Pending</p>
+                    <h3 class="fw-bold mb-0">@pendingItems</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Shipped</p>
+                    <h3 class="fw-bold mb-0">@shippedItems</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Item Value</p>
+                    <h3 class="fw-bold mb-0">
+                        @merchandiseValue.ToString("C", cad)
+                    </h3>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Orders table -->
+    <div class="card border-0 shadow-sm">
+
+        <div class="card-body p-4">
+
+            <h5 class="fw-bold mb-3">
+                Customer Purchases
+            </h5>
+
+            @if (items.Count == 0)
+            {
+                <div class="text-center py-5">
+
+                    <h5 class="fw-semibold">
+                        No orders yet
+                    </h5>
+
+                    <p class="text-muted">
+                        Purchased parts will appear here
+                        once customers complete checkout.
+                    </p>
+
+                    <a asp-controller="Parts"
+                       asp-action="Manage"
+                       class="btn text-white"
+                       style="background-color: #087f73;">
+                        Manage Inventory
+                    </a>
+
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+
+                    <table class="table table-hover align-middle">
+
+                        <thead class="table-light">
+                            <tr>
+                                <th>Part</th>
+                                <th>Order ID</th>
+                                <th>Qty</th>
+                                <th>Value</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            @foreach (var item in items)
+                            {
+                                var statusClass =
+                                    item.FulfillmentStatus switch
+                                    {
+                                        FulfillmentStatus.Pending =>
+                                            "bg-warning text-dark",
+
+                                        FulfillmentStatus.Accepted =>
+                                            "bg-info text-dark",
+
+                                        FulfillmentStatus.Shipped =>
+                                            "bg-primary",
+
+                                        FulfillmentStatus.Completed =>
+                                            "bg-success",
+
+                                        FulfillmentStatus.Cancelled =>
+                                            "bg-secondary",
+
+                                        _ => "bg-secondary"
+                                    };
+
+                                <tr>
+
+                                    <!-- Part -->
+                                    <td>
+                                        <div class="fw-semibold">
+                                            @item.PartName
+                                        </div>
+
+                                        <small class="text-muted">
+                                            Part ID: @item.PartId
+                                        </small>
+                                    </td>
+
+                                    <!-- Order -->
+                                    <td>
+                                        <small>
+                                            @item.OrderId
+                                        </small>
+                                    </td>
+
+                                    <!-- Quantity -->
+                                    <td>
+                                        @item.Quantity
+                                    </td>
+
+                                    <!-- Value -->
+                                    <td class="fw-semibold">
+                                        @item.LineTotalCents.ToString(
+                                            "C", cad)
+                                    </td>
+
+                                    <!-- Status -->
+                                    <td>
+                                        <span class="badge @statusClass">
+                                            @item.FulfillmentStatus
+                                        </span>
+                                    </td>
+
+                                    <!-- Actions -->
+                                    <td>
+
+                                        @if (item.FulfillmentStatus ==
+                                             FulfillmentStatus.Pending)
+                                        {
+                                            <form asp-controller="Orders"
+                                                  asp-action="UpdateFulfillment"
+                                                  method="post"
+                                                  class="d-inline">
+
+                                                @Html.AntiForgeryToken()
+
+                                                <input type="hidden"
+                                                       name="itemId"
+                                                       value="@item.Id" />
+
+                                                <input type="hidden"
+                                                       name="newStatus"
+                                                       value="Accepted" />
+
+                                                <button type="submit"
+                                                        class="btn btn-sm text-white"
+                                                        style="background-color: #087f73;">
+                                                    Accept
+                                                </button>
+                                            </form>
+
+                                            <form asp-controller="Orders"
+                                                  asp-action="UpdateFulfillment"
+                                                  method="post"
+                                                  class="d-inline">
+
+                                                @Html.AntiForgeryToken()
+
+                                                <input type="hidden"
+                                                       name="itemId"
+                                                       value="@item.Id" />
+
+                                                <input type="hidden"
+                                                       name="newStatus"
+                                                       value="Cancelled" />
+
+                                                <button type="submit"
+                                                        class="btn btn-sm btn-outline-danger">
+                                                    Cancel
+                                                </button>
+                                            </form>
+                                        }
+                                        else if (item.FulfillmentStatus ==
+                                                 FulfillmentStatus.Accepted)
+                                        {
+                                            <form asp-controller="Orders"
+                                                  asp-action="UpdateFulfillment"
+                                                  method="post">
+
+                                                @Html.AntiForgeryToken()
+
+                                                <input type="hidden"
+                                                       name="itemId"
+                                                       value="@item.Id" />
+
+                                                <input type="hidden"
+                                                       name="newStatus"
+                                                       value="Shipped" />
+
+                                                <button type="submit"
+                                                        class="btn btn-sm btn-primary">
+                                                    Mark Shipped
+                                                </button>
+                                            </form>
+                                        }
+                                        else if (item.FulfillmentStatus ==
+                                                 FulfillmentStatus.Shipped)
+                                        {
+                                            <form asp-controller="Orders"
+                                                  asp-action="UpdateFulfillment"
+                                                  method="post">
+
+                                                @Html.AntiForgeryToken()
+
+                                                <input type="hidden"
+                                                       name="itemId"
+                                                       value="@item.Id" />
+
+                                                <input type="hidden"
+                                                       name="newStatus"
+                                                       value="Completed" />
+
+                                                <button type="submit"
+                                                        class="btn btn-sm btn-success">
+                                                    Complete
+                                                </button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">
+                                                No actions
+                                            </span>
+                                        }
+
+                                    </td>
+
+                                </tr>
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+            }
+
+        </div>
+    </div>
+
+</div>

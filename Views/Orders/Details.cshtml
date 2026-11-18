@@ -1,0 +1,323 @@
+@model DriveHub.Models.Order
+@using DriveHub.Models
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Order Details";
+
+    var items = ViewBag.OrderItems as List<OrderItem>
+        ?? new List<OrderItem>();
+
+    var cad = CultureInfo.GetCultureInfo("en-CA");
+
+    var statusClass = Model.PaymentStatus switch
+    {
+        PaymentStatus.Paid => "bg-success",
+        PaymentStatus.Pending => "bg-warning text-dark",
+        PaymentStatus.Failed => "bg-danger",
+        PaymentStatus.Cancelled => "bg-secondary",
+        PaymentStatus.Refunded => "bg-info text-dark",
+        _ => "bg-secondary"
+    };
+
+    var checkoutLabel = Model.CheckoutMode switch
+    {
+        CheckoutMode.StripeLive => "Stripe",
+        CheckoutMode.StripeTest => "Stripe Test Mode",
+        CheckoutMode.Simulation => "Local Simulation",
+        _ => "Unknown"
+    };
+
+    var isTestOrder =
+        Model.CheckoutMode != CheckoutMode.StripeLive;
+
+    var address = string.Join(", ",
+        new[]
+        {
+            Model.ShippingStreet,
+            Model.ShippingCity,
+            Model.ShippingProvince,
+            Model.ShippingPostalCode
+        }.Where(x => !string.IsNullOrWhiteSpace(x)));
+}
+
+<div class="container py-4">
+
+    <!-- Back navigation -->
+    <div class="mb-3">
+        <a asp-controller="Orders"
+           asp-action="Index"
+           class="text-decoration-none"
+           style="color: #087f73;">
+            &larr; Back to Order History
+        </a>
+    </div>
+
+    <!-- Order heading -->
+    <div class="d-flex justify-content-between
+                align-items-start flex-wrap gap-3 mb-4">
+
+        <div>
+            <h1 class="fw-bold mb-1">
+                Order @Model.OrderNumber
+            </h1>
+
+            <p class="text-muted mb-0">
+                Placed on
+                @Model.CreatedAt.ToString(
+                    "MMMM dd, yyyy 'at' h:mm tt") UTC
+            </p>
+        </div>
+
+        <span class="badge @statusClass fs-6">
+            @Model.PaymentStatus
+        </span>
+
+    </div>
+
+    @if (isTestOrder)
+    {
+        <div class="alert alert-info">
+            <strong>Test order:</strong>
+            This order uses @checkoutLabel and does
+            not represent a live Stripe payment.
+        </div>
+    }
+
+    @if (Model.PaymentStatus == PaymentStatus.Pending)
+    {
+        <div class="alert alert-warning">
+            Payment is pending. Your order has not
+            yet been confirmed as paid.
+        </div>
+    }
+    else if (Model.PaymentStatus == PaymentStatus.Failed)
+    {
+        <div class="alert alert-danger">
+            Payment failed. This order has not
+            been paid.
+        </div>
+    }
+    else if (Model.PaymentStatus == PaymentStatus.Paid)
+    {
+        <div class="alert alert-success">
+            Payment confirmed.
+            Thank you for your order!
+        </div>
+    }
+
+    <div class="row g-4">
+
+        <!-- LEFT: Purchased items -->
+        <div class="col-lg-8">
+
+            <div class="card border-0 shadow-sm mb-4">
+
+                <div class="card-body p-4">
+
+                    <h5 class="fw-bold mb-3">
+                        Purchased Items
+                    </h5>
+
+                    @if (items.Count == 0)
+                    {
+                        <p class="text-muted mb-0">
+                            No items were found for
+                            this order.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+
+                            <table class="table align-middle">
+
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Part</th>
+                                        <th>Qty</th>
+                                        <th>Unit Price</th>
+                                        <th class="text-end">
+                                            Total
+                                        </th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+
+                                    @foreach (var item in items)
+                                    {
+                                        <tr>
+
+                                            <td>
+                                                <div class="fw-semibold">
+                                                    @item.PartName
+                                                </div>
+
+                                                <small class="text-muted">
+                                                    Fulfillment:
+                                                    @item.FulfillmentStatus
+                                                </small>
+                                            </td>
+
+                                            <td>
+                                                @item.Quantity
+                                            </td>
+
+                                            <td>
+                                                @((item.UnitPriceCents
+                                                    / 100m).ToString("C", cad))
+                                            </td>
+
+                                            <td class="text-end fw-semibold">
+                                                @((item.LineTotalCents
+                                                    / 100m).ToString("C", cad))
+                                            </td>
+
+                                        </tr>
+                                    }
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+                    }
+
+                </div>
+            </div>
+
+            <!-- Shipping information -->
+            <div class="card border-0 shadow-sm">
+
+                <div class="card-body p-4">
+
+                    <h5 class="fw-bold mb-3">
+                        Shipping Address
+                    </h5>
+
+                    @if (string.IsNullOrWhiteSpace(address))
+                    {
+                        <p class="text-muted mb-0">
+                            No shipping address
+                            is available.
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="mb-0">
+                            @Model.ShippingStreet
+                        </p>
+
+                        <p class="mb-0">
+                            @Model.ShippingCity,
+                            @Model.ShippingProvince
+                        </p>
+
+                        <p class="mb-0">
+                            @Model.ShippingPostalCode
+                        </p>
+                    }
+
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT: Order summary -->
+        <div class="col-lg-4">
+
+            <div class="card border-0 shadow-sm">
+
+                <div class="card-body p-4">
+
+                    <h5 class="fw-bold mb-3">
+                        Order Summary
+                    </h5>
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-muted">
+                            Order Number
+                        </span>
+
+                        <span class="fw-semibold">
+                            @Model.OrderNumber
+                        </span>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-muted">
+                            Payment
+                        </span>
+
+                        <span>
+                            @Model.PaymentStatus
+                        </span>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-muted">
+                            Checkout
+                        </span>
+
+                        <span>
+                            @checkoutLabel
+                        </span>
+                    </div>
+
+                    @if (Model.PaidAt.HasValue)
+                    {
+                        <div class="mb-3">
+                            <small class="text-muted">
+                                Paid on
+                                @Model.PaidAt.Value.ToString(
+                                    "MMM dd, yyyy")
+                                UTC
+                            </small>
+                        </div>
+                    }
+
+                    <hr />
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span>Merchandise</span>
+
+                        <span>
+                            @((Model.MerchandiseTotalCents
+                                / 100m).ToString("C", cad))
+                        </span>
+                    </div>
+
+                    <hr />
+
+                    <div class="d-flex justify-content-between
+                                align-items-center mb-3">
+
+                        <strong>Total</strong>
+
+                        <h4 class="fw-bold mb-0">
+                            @((Model.MerchandiseTotalCents
+                                / 100m).ToString("C", cad))
+                        </h4>
+
+                    </div>
+
+                    <p class="text-muted small">
+                        Currency: @Model.Currency.ToUpperInvariant()
+                    </p>
+
+                    <a asp-controller="Orders"
+                       asp-action="Index"
+                       class="btn w-100 text-white"
+                       style="background-color: #087f73;">
+                        View Order History
+                    </a>
+
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>

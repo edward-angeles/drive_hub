@@ -1,2 +1,107 @@
 @model CarPart
-<p><a asp-action="Index">← Back to marketplace</a></p><div class="card detail"><span class="eyebrow">@Model.Category • @Model.Condition</span><h1>@Model.Name</h1><h2>@Model.Price.ToString("C")</h2><p><strong>Manufacturer:</strong> @Model.Manufacturer</p><p><strong>Part number:</strong> @Model.PartNumber</p><p><strong>Car-Part grade:</strong> @Model.Grade (seller-entered)</p><p><strong>Quality:</strong> @Model.QualityScore/100</p><p><strong>Warranty:</strong> @Model.WarrantyMonths months</p><p><strong>Quantity:</strong> @Model.Quantity</p><p>@Model.Description</p><p><em>Vehicle fitment is not yet verified. Checkout will be added in a later milestone.</em></p></div>
+
+@{
+    ViewData["Title"] = Model.Name;
+}
+
+<p>
+    <a asp-action="Index">← Back to marketplace</a>
+</p>
+
+<div class="card detail">
+
+    <span class="eyebrow">
+        @Model.Category • @Model.Condition
+    </span>
+
+    <h1>@Model.Name</h1>
+
+    <h2>@Model.Price.ToString("C")</h2>
+
+    <h3>Part Information</h3>
+
+    <p>
+        <strong>Manufacturer:</strong>
+        @Model.Manufacturer
+    </p>
+
+    <p>
+        <strong>Part number:</strong>
+        @Model.PartNumber
+    </p>
+
+    <p>
+        <strong>Car-Part grade:</strong>
+        @Model.Grade (seller-entered)
+    </p>
+
+    <p>
+        <strong>Quality:</strong>
+        @Model.QualityScore/100
+    </p>
+
+    <p>
+        <strong>Warranty:</strong>
+        @Model.WarrantyMonths months
+    </p>
+
+    <p>
+        <strong>Quantity:</strong>
+        @Model.Quantity
+    </p>
+
+    @if (Model.MileageKm.HasValue)
+    {
+        <p>
+            <strong>Mileage:</strong>
+            @Model.MileageKm.Value.ToString("N0") km
+        </p>
+    }
+
+    <h3>Compatible Vehicle</h3>
+
+    @if (Model.VehicleYear.HasValue &&
+         Model.VehicleMakeId.HasValue &&
+         Model.VehicleModelId.HasValue)
+    {
+        <p>
+            <strong>Year:</strong>
+            @Model.VehicleYear
+        </p>
+
+        <p>
+            <strong>Make:</strong>
+            @Model.VehicleMakeName
+        </p>
+
+        <p>
+            <strong>Model:</strong>
+            @Model.VehicleModelName
+        </p>
+
+        <p>
+            <em>
+                Vehicle compatibility is declared by the seller.
+                Physical fitment has not been independently verified.
+            </em>
+        </p>
+    }
+    else
+    {
+        <p>
+            No compatible vehicle has been specified
+            for this listing.
+        </p>
+    }
+
+    <h3>Description</h3>
+
+    <p>@Model.Description</p>
+
+    <p>
+        <em>
+            Checkout will be added in a later milestone.
+        </em>
+    </p>
+
+</div>

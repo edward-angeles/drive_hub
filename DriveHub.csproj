@@ -1,5 +1,5 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>  <UserSecretsId>d188014c-9100-4b0d-b1bd-40d328f6e12f</UserSecretsId>
   </PropertyGroup>
-  <ItemGroup><PackageReference Include="Google.Cloud.Firestore" Version="3.11.0" /></ItemGroup>
+  <ItemGroup><PackageReference Include="FirebaseAdmin" Version="3.7.0" /><PackageReference Include="Google.Cloud.Firestore" Version="3.11.0" /></ItemGroup>
 </Project>
